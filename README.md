@@ -1,139 +1,136 @@
-<h1 align="center">
-  <a href="https://pion.ly"><img src="./.github/pion-gopher-webrtc.png" alt="Pion WebRTC" height="250px"></a>
-  <br>
-  Pion WebRTC
-  <br>
-</h1>
-<h4 align="center">A pure Go implementation of the WebRTC API</h4>
-<p align="center">
-  <a href="https://pion.ly"><img src="https://img.shields.io/badge/pion-webrtc-gray.svg?longCache=true&colorB=brightgreen" alt="Pion WebRTC"></a>
-  <a href="https://sourcegraph.com/github.com/pion/webrtc?badge"><img src="https://sourcegraph.com/github.com/pion/webrtc/-/badge.svg" alt="Sourcegraph Widget"></a>
-  <a href="https://discord.gg/PngbdqpFbt"><img src="https://img.shields.io/badge/join-us%20on%20discord-gray.svg?longCache=true&logo=discord&colorB=brightblue" alt="join us on Discord"></a> <a href="https://bsky.app/profile/pion.ly"><img src="https://img.shields.io/badge/follow-us%20on%20bluesky-gray.svg?longCache=true&logo=bluesky&colorB=brightblue" alt="Follow us on Bluesky"></a> <a href="https://twitter.com/_pion?ref_src=twsrc%5Etfw"><img src="https://img.shields.io/twitter/url.svg?label=Follow%20%40_pion&style=social&url=https%3A%2F%2Ftwitter.com%2F_pion" alt="Twitter Widget"></a>
-  <a href="https://github.com/pion/awesome-pion" alt="Awesome Pion"><img src="https://cdn.rawgit.com/sindresorhus/awesome/d7305f38d29fed78fa85652e3a63e154dd8e8829/media/badge.svg"></a>
-  <br>
-  <img alt="GitHub Workflow Status" src="https://img.shields.io/github/actions/workflow/status/pion/webrtc/test.yaml">
-  <a href="https://pkg.go.dev/github.com/pion/webrtc/v4"><img src="https://pkg.go.dev/badge/github.com/pion/webrtc/v4.svg" alt="Go Reference"></a>
-  <a href="https://codecov.io/gh/pion/webrtc"><img src="https://codecov.io/gh/pion/webrtc/branch/master/graph/badge.svg" alt="Coverage Status"></a>
-  <a href="https://goreportcard.com/report/github.com/pion/webrtc/v4"><img src="https://goreportcard.com/badge/github.com/pion/webrtc/v4" alt="Go Report Card"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-</p>
-<br>
+# Pion WebRTC - Multipath Edition
 
-### New Release
+A pure Go implementation of WebRTC with multipath support. This fork extends [Pion WebRTC](https://github.com/pion/webrtc) to maintain and utilize multiple ICE candidate pairs simultaneously instead of selecting a single "winning" path.
 
-Pion WebRTC v4.0.0 has been released! See the [release notes](https://github.com/pion/webrtc/wiki/Release-WebRTC@v4.0.0) to learn about new features and breaking changes.
+## Motivation
 
-If you aren't able to upgrade yet check the [tags](https://github.com/pion/webrtc/tags) for the latest `v3` release.
+Standard WebRTC implementations use ICE to discover candidate pairs and nominate the best one for communication. This approach has limitations:
 
-We would love your feedback! Please create GitHub issues or Join the [Discord](https://discord.gg/PngbdqpFbt) to follow development and speak with the maintainers.
+- **Single point of failure**: Connection loss when the selected path fails
+- **Underutilized resources**: Multiple network interfaces available but only one used
+- **Poor handoff**: Network transitions cause connection interruptions
+- **Limited bandwidth**: Cannot aggregate bandwidth across multiple paths
 
------
+This implementation addresses these limitations by preventing ICE nomination and distributing traffic across all available candidate pairs.
 
-### Usage
-[Go Modules](https://blog.golang.org/using-go-modules) are mandatory for using Pion WebRTC. So make sure you set `export GO111MODULE=on`, and explicitly specify `/v4` (or an earlier version) when importing.
+## Implementation
 
+### Core Components
 
-**[example applications](examples/README.md)** contains code samples of common things people build with Pion WebRTC.
+- **`multipath.go`** - Core multipath functionality with weighted packet distribution
+- **`multipath_integration.go`** - PeerConnection integration and state management  
+- **`multipath_enhanced.go`** - Advanced multipath transport with per-pair statistics
 
-**[example-webrtc-applications](https://github.com/pion/example-webrtc-applications)** contains more full featured examples that use 3rd party libraries.
+### Key Changes
 
-**[awesome-pion](https://github.com/pion/awesome-pion)** contains projects that have used Pion, and serve as real world examples of usage.
+1. **ICE Nomination Prevention**: Intercepts STUN binding requests with USE-CANDIDATE attribute and rejects them
+2. **Weighted Distribution**: Distributes packets across candidate pairs based on performance metrics
+3. **Dynamic Weight Adjustment**: Updates path weights based on RTT and packet loss measurements
+4. **Packet Deduplication**: Handles duplicate packets arriving via different paths
+5. **Extended PeerConnection API**: New methods for multipath control and monitoring
 
-**[GoDoc](https://pkg.go.dev/github.com/pion/webrtc/v4)** is an auto generated API reference. All our Public APIs are commented.
+### Algorithms
 
-**[FAQ](https://github.com/pion/webrtc/wiki/FAQ)** has answers to common questions. If you have a question not covered please ask in [Discord](https://discord.gg/PngbdqpFbt) we are always looking to expand it.
+#### Nomination Prevention
+```go
+func preventNominationHandler(m *stun.Message, local, remote ice.Candidate, pair *ice.CandidatePair) bool {
+    for _, attr := range m.Attributes {
+        if attr.Type == 0x0025 { // USE-CANDIDATE attribute
+            return false
+        }
+    }
+    return true
+}
+```
 
-Now go build something awesome! Here are some **ideas** to get your creative juices flowing:
-* Send a video file to multiple browser in real time for perfectly synchronized movie watching.
-* Send a webcam on an embedded device to your browser with no additional server required!
-* Securely send data between two servers, without using pub/sub.
-* Record your webcam and do special effects server side.
-* Build a conferencing application that processes audio/video and make decisions off of it.
-* Remotely control a robots and stream its cameras in realtime.
+#### Weighted Distribution
+```go
+for _, candidatePair := range activePairs {
+    probability := pathWeight / totalWeight
+    if probability > 0.5 || (sentCount == 0 && isBackupPath) {
+        sendPacket(candidatePair, packet)
+    }
+}
+```
 
-### Need Help?
-Check out [WebRTC for the Curious](https://webrtcforthecurious.com). A book about WebRTC in depth, not just about the APIs.
-Learn the full details of ICE, SCTP, DTLS, SRTP, and how they work together to make up the WebRTC stack. This is also a great
-resource if you are trying to debug. Learn the tools of the trade and how to approach WebRTC issues. This book is vendor
-agnostic and will not have any Pion specific information.
+#### Dynamic Weight Calculation
+```go
+rttWeight := 100.0 / float64(rtt.Milliseconds())
+lossWeight := 1.0 - packetLossRate
+newWeight := rttWeight * lossWeight
+finalWeight := 0.7*oldWeight + 0.3*newWeight
+```
 
-Pion has an active community on [Discord](https://discord.gg/PngbdqpFbt). Please ask for help about anything, questions don't have to be Pion specific!
-Come share your interesting project you are working on. We are here to support you.
+## Usage
 
-One of the maintainers of Pion [Sean-Der](https://github.com/sean-der) is available to help. Schedule at [siobud.com/meeting](https://siobud.com/meeting)
-He is available to talk about Pion or general WebRTC questions, feel free to reach out about anything!
+```go
+// Configure multipath
+settingEngine := webrtc.SettingEngine{}
+webrtc.ConfigureMultipathSettingEngine(&settingEngine, true)
 
-### Features
-#### PeerConnection API
-* Go implementation of [webrtc-pc](https://w3c.github.io/webrtc-pc/) and [webrtc-stats](https://www.w3.org/TR/webrtc-stats/)
-* DataChannels
-* Send/Receive audio and video
-* Renegotiation
-* Plan-B and Unified Plan
-* [SettingEngine](https://pkg.go.dev/github.com/pion/webrtc/v4#SettingEngine) for Pion specific extensions
+api := webrtc.NewAPI(webrtc.WithSettingEngine(settingEngine))
+pc, _ := api.NewPeerConnection(webrtc.Configuration{})
 
+// Enable multipath
+pc.EnableMultipath()
 
-#### Connectivity
-* Full ICE Agent
-* ICE Restart
-* Trickle ICE
-* STUN
-* TURN (UDP, TCP, DTLS and TLS)
-* mDNS candidates
+// Monitor statistics
+stats := pc.GetMultipathStats()
+for pairKey, pairStats := range stats {
+    fmt.Printf("Path %s: %d packets sent, RTT: %v\n", 
+        pairKey, pairStats.PacketsSent, pairStats.LastRTT)
+}
+```
 
-#### DataChannels
-* Ordered/Unordered
-* Lossy/Lossless
+## Configuration
 
-#### Media
-* API with direct RTP/RTCP access
-* Opus, PCM, H264, VP8 and VP9 packetizer
-* API also allows developer to pass their own packetizer
-* IVF, Ogg, H264 and Matroska provided for easy sending and saving
-* [getUserMedia](https://github.com/pion/mediadevices) implementation (Requires Cgo)
-* Easy integration with x264, libvpx, GStreamer and ffmpeg.
-* [Simulcast](https://github.com/pion/webrtc/tree/master/examples/simulcast)
-* [SVC](https://github.com/pion/rtp/blob/master/codecs/vp9_packet.go#L138)
-* [NACK](https://github.com/pion/interceptor/pull/4)
-* [Sender/Receiver Reports](https://github.com/pion/interceptor/tree/master/pkg/report)
-* [Transport Wide Congestion Control Feedback](https://github.com/pion/interceptor/tree/master/pkg/twcc)
-* [Bandwidth Estimation](https://github.com/pion/webrtc/tree/master/examples/bandwidth-estimation-from-disk)
+```go
+type MultipathConfig struct {
+    Enabled              bool
+    PreventNomination    bool
+    WeightUpdateInterval time.Duration
+    InitialWeight        float64
+    MinWeight            float64
+    MaxWeight            float64
+}
+```
 
-#### Security
-* TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 and TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA for DTLS v1.2
-* SRTP_AEAD_AES_256_GCM and SRTP_AES128_CM_HMAC_SHA1_80 for SRTP
-* Hardware acceleration available for GCM suites
+## Testing
 
-#### Pure Go
-* No Cgo usage
-* Wide platform support
-  * Windows, macOS, Linux, FreeBSD
-  * iOS, Android
-  * [WASM](https://github.com/pion/webrtc/wiki/WebAssembly-Development-and-Testing) see [examples](examples/README.md#webassembly)
-  *  386, amd64, arm, mips, ppc64
-* Easy to build *Numbers generated on Intel(R) Core(TM) i5-2520M CPU @ 2.50GHz*
-  * **Time to build examples/play-from-disk** - 0.66s user 0.20s system 306% cpu 0.279 total
-  * **Time to run entire test suite** - 25.60s user 9.40s system 45% cpu 1:16.69 total
-* Tools to measure performance [provided](https://github.com/pion/rtsp-bench)
+The implementation includes comprehensive tests that validate multipath functionality:
 
-### Roadmap
-The library is in active development, please refer to the [roadmap](https://github.com/pion/webrtc/issues/9) to track our major milestones.
-We also maintain a list of [Big Ideas](https://github.com/pion/webrtc/wiki/Big-Ideas) these are things we want to build but don't have a clear plan or the resources yet.
-If you are looking to get involved this is a great place to get started! We would also love to hear your ideas! Even if you can't implement it yourself, it could inspire others.
+```bash
+# Run multipath tests
+go test -v -run "TestMultipathPacketDistribution|TestNominationPrevention|TestMultipathWeightAdjustment"
 
-### Sponsoring
-Work on Pion's congestion control and bandwidth estimation was funded through the [User-Operated Internet](https://nlnet.nl/useroperated/) fund, a fund established by [NLnet](https://nlnet.nl/) made possible by financial support from the [PKT Community](https://pkt.cash/)/[The Network Steward](https://pkt.cash/network-steward) and stichting [Technology Commons Trust](https://technologycommons.org/).
+# Run examples
+cd examples/weighted-distribution && go run main.go
+cd examples/multipath && go run main.go
+```
 
-### Community
-Pion has an active community on the [Discord](https://discord.gg/PngbdqpFbt).
+Tests demonstrate:
+- Packet distribution across multiple paths
+- ICE nomination prevention
+- Dynamic weight adjustment based on network conditions
+- Packet deduplication
+- Configuration and API functionality
 
-Follow the [Pion Bluesky](https://bsky.app/profile/pion.ly) or [Pion Twitter](https://twitter.com/_pion) for project updates and important WebRTC news.
+## Examples
 
-We are always looking to support **your projects**. Please reach out if you have something to build!
-If you need commercial support or don't want to use public methods you can contact us at [team@pion.ly](mailto:team@pion.ly)
+- **[Multipath Demo](examples/multipath/)** - Complete example with real-time statistics
+- **[Weighted Distribution](examples/weighted-distribution/)** - Demonstrates packet distribution algorithms
 
-### Contributing
-Check out the [contributing wiki](https://github.com/pion/webrtc/wiki/Contributing) to join the group of amazing people making this project possible
+## Limitations
 
-### License
-MIT License - see [LICENSE](LICENSE) for full text
+- Requires modifications to underlying pion/ice library for optimal packet transmission
+- SRTP sequence number handling needs consideration for multiple paths
+- Bandwidth usage multiplies with number of active paths
+- Integration tests require virtual network setup for full validation
+
+## License
+
+MIT License (same as upstream Pion WebRTC)
+
+## Upstream
+
+Based on [github.com/pion/webrtc](https://github.com/pion/webrtc)

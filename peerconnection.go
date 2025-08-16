@@ -91,6 +91,8 @@ type PeerConnection struct {
 	log logging.LeveledLogger
 
 	interceptorRTCPWriter interceptor.RTCPWriter
+	
+	multipathState *MultipathState
 }
 
 // NewPeerConnection creates a PeerConnection with the default codecs and interceptors.
