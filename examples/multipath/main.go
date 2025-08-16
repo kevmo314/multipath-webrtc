@@ -119,7 +119,7 @@ func main() {
 	
 	fmt.Println("\n=== Copy and paste this offer to the remote peer ===")
 	fmt.Println(string(offerJSON))
-	fmt.Println("=====================================================\n")
+	fmt.Println("=====================================================")
 	
 	// Wait for answer
 	fmt.Println("Paste the answer from the remote peer and press Enter:")

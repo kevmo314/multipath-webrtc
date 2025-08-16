@@ -16,16 +16,12 @@ import (
 	"github.com/pion/ice/v4"
 	"github.com/pion/logging"
 	"github.com/pion/rtp"
-	"github.com/pion/stun/v3"
 )
 
 // MultipathConfig configures multipath WebRTC behavior
 type MultipathConfig struct {
 	// Enable multipath mode
 	Enabled bool
-	
-	// PreventNomination prevents ICE candidate nomination
-	PreventNomination bool
 	
 	// WeightUpdateInterval controls how often candidate weights are updated
 	WeightUpdateInterval time.Duration
@@ -44,7 +40,6 @@ type MultipathConfig struct {
 func DefaultMultipathConfig() *MultipathConfig {
 	return &MultipathConfig{
 		Enabled:              false,
-		PreventNomination:    true,
 		WeightUpdateInterval: 100 * time.Millisecond,
 		InitialWeight:        1.0,
 		MinWeight:            0.1,
@@ -307,29 +302,9 @@ func getCandidatePairKey(pair *ice.CandidatePair) string {
 	return pair.Local.String() + "->" + pair.Remote.String()
 }
 
-// preventNominationHandler is a STUN binding request handler that prevents nomination
-func preventNominationHandler(m *stun.Message, local, remote ice.Candidate, pair *ice.CandidatePair) bool {
-	// Check for USE-CANDIDATE attribute (0x0025) which indicates nomination
-	// The USE-CANDIDATE attribute indicates that the candidate pair
-	// resulting from this check should be used for transmission
-	for _, attr := range m.Attributes {
-		if attr.Type == 0x0025 { // USE-CANDIDATE attribute type
-			// USE-CANDIDATE attribute present, prevent nomination by returning false
-			return false
-		}
-	}
-	
-	// Allow non-nomination binding requests
-	return true
-}
 
 // SetupMultipath configures a SettingEngine for multipath operation
 func SetupMultipath(e *SettingEngine, config *MultipathConfig) {
-	if config.PreventNomination {
-		// Set binding request handler to prevent nomination
-		e.SetICEBindingRequestHandler(preventNominationHandler)
-	}
-	
 	// Ensure keepalive is frequent enough to maintain all pairs
 	e.SetICETimeouts(
 		5*time.Second,  // disconnected timeout

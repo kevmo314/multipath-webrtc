@@ -16,7 +16,6 @@ import (
 	"github.com/pion/ice/v4"
 	"github.com/pion/logging"
 	"github.com/pion/rtp"
-	"github.com/pion/stun/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -237,65 +236,6 @@ func (ms *testMultipathSender) SendRTP(packet *rtp.Packet) error {
 	return nil
 }
 
-// TestNominationPrevention proves that ICE nominations are being prevented
-func TestNominationPrevention(t *testing.T) {
-	nominationAttempts := 0
-	nominationsPrevented := 0
-	
-	// Create test STUN messages
-	testMessages := []*stun.Message{
-		// Regular binding request (should be allowed)
-		{
-			Type:       stun.BindingRequest,
-			Attributes: []stun.RawAttribute{},
-		},
-		// Binding request with USE-CANDIDATE (should be prevented)
-		{
-			Type: stun.BindingRequest,
-			Attributes: []stun.RawAttribute{
-				{Type: 0x0025, Value: []byte{}}, // USE-CANDIDATE
-			},
-		},
-		// Another nomination attempt
-		{
-			Type: stun.BindingRequest,
-			Attributes: []stun.RawAttribute{
-				{Type: 0x0025, Value: []byte{}}, // USE-CANDIDATE
-				{Type: 0x0024, Value: []byte{0x00, 0x00, 0x00, 0x01}}, // PRIORITY
-			},
-		},
-	}
-	
-	// Test our nomination prevention handler
-	for _, msg := range testMessages {
-		nominationAttempts++
-		
-		// Check if this message contains USE-CANDIDATE
-		hasUseCandidate := false
-		for _, attr := range msg.Attributes {
-			if attr.Type == 0x0025 { // USE-CANDIDATE
-				hasUseCandidate = true
-				break
-			}
-		}
-		
-		result := preventNominationHandler(msg, nil, nil, nil)
-		
-		if hasUseCandidate {
-			assert.False(t, result, "Should prevent nomination when USE-CANDIDATE is present")
-			if !result {
-				nominationsPrevented++
-			}
-		} else {
-			assert.True(t, result, "Should allow when USE-CANDIDATE is not present")
-		}
-	}
-	
-	t.Logf("Nomination attempts: %d", nominationAttempts)
-	t.Logf("Nominations prevented: %d", nominationsPrevented)
-	
-	assert.Equal(t, 2, nominationsPrevented, "Should have prevented 2 nomination attempts")
-}
 
 // TestMultipathWeightAdjustment proves that path weights are dynamically adjusted
 func TestMultipathWeightAdjustment(t *testing.T) {
@@ -361,13 +301,11 @@ func TestMultipathConfiguration(t *testing.T) {
 	// Test default configuration
 	defaultConfig := DefaultMultipathConfig()
 	assert.False(t, defaultConfig.Enabled)
-	assert.True(t, defaultConfig.PreventNomination)
 	assert.Equal(t, 100*time.Millisecond, defaultConfig.WeightUpdateInterval)
 	
 	// Test custom configuration
 	customConfig := &MultipathConfig{
 		Enabled:              true,
-		PreventNomination:    true,
 		WeightUpdateInterval: 50 * time.Millisecond,
 		InitialWeight:        2.0,
 		MinWeight:            0.5,

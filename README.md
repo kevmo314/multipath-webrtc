@@ -101,7 +101,7 @@ The implementation includes comprehensive tests that validate multipath function
 
 ```bash
 # Run multipath tests
-go test -v -run "TestMultipathPacketDistribution|TestNominationPrevention|TestMultipathWeightAdjustment"
+go test -v -run "TestMultipathPacketDistribution|TestMultipathWeightAdjustment"
 
 # Run examples
 cd examples/weighted-distribution && go run main.go

@@ -109,6 +109,9 @@ type SettingEngine struct {
 	fireOnTrackBeforeFirstRTP                 bool
 	disableCloseByDTLS                        bool
 	dataChannelBlockWrite                     bool
+	iceEnableRenomination                     bool
+	iceNominationValueGenerator               func() uint32
+	multipathState                            *MultipathState
 }
 
 func (e *SettingEngine) getSCTPMaxMessageSize() uint32 {
@@ -569,4 +572,12 @@ func (e *SettingEngine) SetFireOnTrackBeforeFirstRTP(fireOnTrackBeforeFirstRTP b
 // and relies on the ice failed state to detect the connection is interrupted.
 func (e *SettingEngine) DisableCloseByDTLS(isEnabled bool) {
 	e.disableCloseByDTLS = isEnabled
+}
+
+// SetICERenomination enables ICE renomination as described in draft-thatcher-ice-renomination-01.
+// When enabled, the controlling agent can renominate candidate pairs multiple times
+// and the controlled agent follows "last nomination wins" rule.
+func (e *SettingEngine) SetICERenomination(enabled bool, nominationValueGenerator func() uint32) {
+	e.iceEnableRenomination = enabled
+	e.iceNominationValueGenerator = nominationValueGenerator
 }

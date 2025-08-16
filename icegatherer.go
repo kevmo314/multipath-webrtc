@@ -129,9 +129,11 @@ func (g *ICEGatherer) createAgent() error { //nolint:cyclop
 		TCPMux:                 g.api.settingEngine.iceTCPMux,
 		UDPMux:                 g.api.settingEngine.iceUDPMux,
 		ProxyDialer:            g.api.settingEngine.iceProxyDialer,
-		DisableActiveTCP:       g.api.settingEngine.iceDisableActiveTCP,
-		MaxBindingRequests:     g.api.settingEngine.iceMaxBindingRequests,
-		BindingRequestHandler:  g.api.settingEngine.iceBindingRequestHandler,
+		DisableActiveTCP:          g.api.settingEngine.iceDisableActiveTCP,
+		MaxBindingRequests:        g.api.settingEngine.iceMaxBindingRequests,
+		BindingRequestHandler:     g.api.settingEngine.iceBindingRequestHandler,
+		EnableRenomination:        g.api.settingEngine.iceEnableRenomination,
+		NominationValueGenerator:  g.api.settingEngine.iceNominationValueGenerator,
 	}
 
 	requestedNetworkTypes := g.api.settingEngine.candidates.ICENetworkTypes

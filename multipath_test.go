@@ -20,7 +20,6 @@ func TestMultipathConfig(t *testing.T) {
 	config := DefaultMultipathConfig()
 	
 	assert.False(t, config.Enabled)
-	assert.True(t, config.PreventNomination)
 	assert.Equal(t, 100*time.Millisecond, config.WeightUpdateInterval)
 	assert.Equal(t, 1.0, config.InitialWeight)
 	assert.Equal(t, 0.1, config.MinWeight)
@@ -56,27 +55,14 @@ func TestMultipathSender(t *testing.T) {
 	assert.False(t, ms.IsPacketDuplicate(2))
 }
 
-func TestPreventNominationHandler(t *testing.T) {
-	// Test with USE-CANDIDATE attribute (should prevent)
-	msg := &stun.Message{}
-	msg.Attributes = []stun.RawAttribute{
-		{Type: 0x0025, Value: []byte{}}, // USE-CANDIDATE attribute
-	}
-	
-	result := preventNominationHandler(msg, nil, nil, nil)
-	assert.False(t, result, "Should prevent nomination when USE-CANDIDATE is present")
-	
-	// Test without USE-CANDIDATE attribute (should allow)
-	msg2 := &stun.Message{}
-	result2 := preventNominationHandler(msg2, nil, nil, nil)
-	assert.True(t, result2, "Should allow when USE-CANDIDATE is not present")
-}
 
 func TestMultipathState(t *testing.T) {
 	state := NewMultipathState()
 	
 	assert.False(t, state.enabled)
-	assert.True(t, state.preventNomination)
+	assert.False(t, state.preventNomination) // Changed: new default allows nominations for renomination
+	assert.True(t, state.enableRenomination) // New: renomination enabled by default
+	assert.Equal(t, Conservative, state.strategy) // New: default strategy
 	assert.NotNil(t, state.activePairs)
 	assert.NotNil(t, state.pairStats)
 }
@@ -110,11 +96,17 @@ func TestPeerConnectionMultipath(t *testing.T) {
 }
 
 func TestMultipathBindingRequestHandler(t *testing.T) {
+	// Test new default behavior (renomination strategy)
 	state := NewMultipathState()
 	handler := multipathBindingRequestHandler(state)
 	
 	// Test handling without USE-CANDIDATE (with nil candidates)
-	msg := &stun.Message{}
+	msg := &stun.Message{
+		Type: stun.MessageType{
+			Method: stun.MethodBinding,
+			Class:  stun.ClassRequest,
+		},
+	}
 	result := handler(msg, nil, nil, nil)
 	assert.True(t, result)
 	
@@ -122,13 +114,27 @@ func TestMultipathBindingRequestHandler(t *testing.T) {
 	assert.Len(t, state.activePairs, 0)
 	assert.Len(t, state.pairStats, 0)
 	
-	// Test handling with USE-CANDIDATE (should prevent nomination)
-	msg2 := &stun.Message{}
+	// Test handling with USE-CANDIDATE (should allow for renomination strategy)
+	msg2 := &stun.Message{
+		Type: stun.MessageType{
+			Method: stun.MethodBinding,
+			Class:  stun.ClassRequest,
+		},
+	}
 	msg2.Attributes = []stun.RawAttribute{
 		{Type: 0x0025, Value: []byte{}}, // USE-CANDIDATE attribute
 	}
 	result2 := handler(msg2, nil, nil, nil)
-	assert.False(t, result2)
+	assert.True(t, result2) // Changed: new behavior allows nominations for renomination
+	
+	// Test old nomination prevention behavior
+	oldState := NewMultipathState()
+	oldState.preventNomination = true
+	oldState.enableRenomination = false
+	oldHandler := multipathBindingRequestHandler(oldState)
+	
+	result3 := oldHandler(msg2, nil, nil, nil)
+	assert.False(t, result3) // Old behavior should still prevent nominations
 }
 
 func TestCandidatePairKey(t *testing.T) {
